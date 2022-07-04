@@ -318,10 +318,12 @@ func NewServer(args *PilotArgs, initFuncs ...func(*Server)) (*Server, error) {
 		}
 		authenticators = append(authenticators, jwtAuthn)
 	}
-	// The k8s JWT authenticator requires the multicluster registry to be initialized,
-	// so we build it later.
-	authenticators = append(authenticators,
-		kubeauth.NewKubeJWTAuthenticator(s.environment.Watcher, s.kubeClient.Kube(), s.clusterID, s.multiclusterController.GetRemoteKubeClient, features.JwtPolicy))
+	if s.kubeClient != nil {
+		// The k8s JWT authenticator requires the multicluster registry to be initialized,
+		// so we build it later.
+		authenticators = append(authenticators,
+			kubeauth.NewKubeJWTAuthenticator(s.environment.Watcher, s.kubeClient.Kube(), s.clusterID, s.multiclusterController.GetRemoteKubeClient, features.JwtPolicy))
+	}
 	if features.XDSAuth {
 		s.XDSServer.Authenticators = authenticators
 	}
