@@ -251,4 +251,5 @@ require (
 	sigs.k8s.io/structured-merge-diff/v4 v4.2.1 // indirect
 )
 
-replace github.com/envoyproxy/go-control-plane => github.com/gu0keno0/go-control-plane v0.0.1
+replace github.com/envoyproxy/go-control-plane => github.com/gu0keno0/go-control-plane v0.0.3
+replace github.com/istio/api => github.com/gu0keno0/istio-api v0.0.1
