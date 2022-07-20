@@ -515,8 +515,10 @@ func TestApplyDestinationRule(t *testing.T) {
 			proxy := cg.SetupProxy(nil)
 			cb := NewClusterBuilder(proxy, &model.PushRequest{Push: cg.PushContext()}, nil)
 
+			tt.cluster.CommonLbConfig = &cluster.Cluster_CommonLbConfig{}
+
 			ec := NewMutableCluster(tt.cluster)
-			destRule := proxy.SidecarScope.DestinationRule(model.TrafficDirectionOutbound, proxy, tt.service.Hostname)
+			destRule := proxy.SidecarScope.DestinationRule(model.TrafficDirectionOutbound, proxy, tt.service.Hostname).GetRule()
 
 			subsetClusters := cb.applyDestinationRule(ec, tt.clusterMode, tt.service, tt.port, tt.proxyView, destRule, nil)
 			if len(subsetClusters) != len(tt.expectedSubsetClusters) {
@@ -915,6 +917,7 @@ func TestBuildDefaultCluster(t *testing.T) {
 			expectedCluster: &cluster.Cluster{
 				Name:                 "foo",
 				ClusterDiscoveryType: &cluster.Cluster_Type{Type: cluster.Cluster_EDS},
+				CommonLbConfig:       &cluster.Cluster_CommonLbConfig{},
 				ConnectTimeout:       &durationpb.Duration{Seconds: 10, Nanos: 1},
 				CircuitBreakers: &cluster.CircuitBreakers{
 					Thresholds: []*cluster.CircuitBreakers_Thresholds{getDefaultCircuitBreakerThresholds()},
@@ -1006,6 +1009,7 @@ func TestBuildDefaultCluster(t *testing.T) {
 			expectedCluster: &cluster.Cluster{
 				Name:                 "foo",
 				ClusterDiscoveryType: &cluster.Cluster_Type{Type: cluster.Cluster_STATIC},
+				CommonLbConfig:       &cluster.Cluster_CommonLbConfig{},
 				ConnectTimeout:       &durationpb.Duration{Seconds: 10, Nanos: 1},
 				Filters:              []*cluster.Filter{xdsfilters.TCPClusterMx},
 				LbPolicy:             defaultLBAlgorithm(),
@@ -3329,8 +3333,10 @@ func TestApplyDestinationRuleOSCACert(t *testing.T) {
 			proxy := cg.SetupProxy(nil)
 			cb := NewClusterBuilder(proxy, &model.PushRequest{Push: cg.PushContext()}, nil)
 
+			tt.cluster.CommonLbConfig = &cluster.Cluster_CommonLbConfig{}
+
 			ec := NewMutableCluster(tt.cluster)
-			destRule := proxy.SidecarScope.DestinationRule(model.TrafficDirectionOutbound, proxy, tt.service.Hostname)
+			destRule := proxy.SidecarScope.DestinationRule(model.TrafficDirectionOutbound, proxy, tt.service.Hostname).GetRule()
 
 			// ACT
 			_ = cb.applyDestinationRule(ec, tt.clusterMode, tt.service, tt.port, tt.proxyView, destRule, nil)
@@ -3417,7 +3423,6 @@ func TestApplyTCPKeepalive(t *testing.T) {
 }
 
 func TestApplyConnectionPool(t *testing.T) {
-	// only test connectionPool.Http.IdleTimeout and connectionPool.Http.IdleTimeout.MaxRequestsPerConnection
 	cases := []struct {
 		name                string
 		cluster             *cluster.Cluster
@@ -3478,7 +3483,7 @@ func TestApplyConnectionPool(t *testing.T) {
 			},
 		},
 		{
-			name:    "update MaxRequestsPerConnection and IdleTimeout",
+			name:    "update multiple fields",
 			cluster: &cluster.Cluster{Name: "foo", ClusterDiscoveryType: &cluster.Cluster_Type{Type: cluster.Cluster_EDS}},
 			httpProtocolOptions: &http.HttpProtocolOptions{
 				CommonHttpProtocolOptions: &core.HttpProtocolOptions{
@@ -3495,6 +3500,11 @@ func TestApplyConnectionPool(t *testing.T) {
 					},
 					MaxRequestsPerConnection: 22,
 				},
+				Tcp: &networking.ConnectionPoolSettings_TCPSettings{
+					MaxConnectionDuration: &durationpb.Duration{
+						Seconds: 500,
+					},
+				},
 			},
 			expectedHTTPPOpt: &http.HttpProtocolOptions{
 				CommonHttpProtocolOptions: &core.HttpProtocolOptions{
@@ -3502,6 +3512,9 @@ func TestApplyConnectionPool(t *testing.T) {
 						Seconds: 22,
 					},
 					MaxRequestsPerConnection: &wrappers.UInt32Value{Value: 22},
+					MaxConnectionDuration: &durationpb.Duration{
+						Seconds: 500,
+					},
 				},
 			},
 		},
@@ -3527,6 +3540,8 @@ func TestApplyConnectionPool(t *testing.T) {
 				tt.expectedHTTPPOpt.CommonHttpProtocolOptions.IdleTimeout)
 			assert.Equal(t, opts.mutable.httpProtocolOptions.CommonHttpProtocolOptions.MaxRequestsPerConnection,
 				tt.expectedHTTPPOpt.CommonHttpProtocolOptions.MaxRequestsPerConnection)
+			assert.Equal(t, opts.mutable.httpProtocolOptions.CommonHttpProtocolOptions.MaxConnectionDuration,
+				tt.expectedHTTPPOpt.CommonHttpProtocolOptions.MaxConnectionDuration)
 		})
 	}
 }

@@ -340,7 +340,11 @@ func (configgen *ConfigGeneratorImpl) buildGatewayHTTPRouteConfig(node *model.Pr
 
 		// This can happen when a gateway has recently been deleted. Envoy will still request route
 		// information due to the draining of listeners, so we should not return an error.
-		return nil
+		return &route.RouteConfiguration{
+			Name:             routeName,
+			VirtualHosts:     []*route.VirtualHost{},
+			ValidateClusters: proto.BoolFalse,
+		}
 	}
 
 	servers := merged.ServersByRouteName[routeName]
@@ -891,7 +895,7 @@ func builtAutoPassthroughFilterChains(push *model.PushContext, proxy *model.Prox
 				statPrefix = telemetry.BuildStatPrefix(push.Mesh.OutboundClusterStatName, string(service.Hostname), "", port, &service.Attributes)
 			}
 			destinationRule := CastDestinationRule(proxy.SidecarScope.DestinationRule(
-				model.TrafficDirectionOutbound, proxy, service.Hostname))
+				model.TrafficDirectionOutbound, proxy, service.Hostname).GetRule())
 
 			// First, we build the standard cluster. We match on the SNI matching the cluster name
 			// (per the spec of AUTO_PASSTHROUGH), as well as all possible Istio mTLS ALPNs. This,

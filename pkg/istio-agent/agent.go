@@ -31,10 +31,10 @@ import (
 	"github.com/cenkalti/backoff/v4"
 	bootstrapv3 "github.com/envoyproxy/go-control-plane/envoy/config/bootstrap/v3"
 	discovery "github.com/envoyproxy/go-control-plane/envoy/service/discovery/v3"
-	"github.com/golang/protobuf/proto"
 	"google.golang.org/api/option"
 	"google.golang.org/grpc"
 	"google.golang.org/grpc/credentials/insecure"
+	"google.golang.org/protobuf/proto"
 
 	mesh "istio.io/api/mesh/v1alpha1"
 	"istio.io/istio/pilot/cmd/pilot-agent/config"
@@ -146,6 +146,8 @@ type AgentOptions struct {
 	DNSCapture bool
 	// DNSAddr is the DNS capture address
 	DNSAddr string
+	// DNSForwardParallel indicates whether the agent should send parallel DNS queries to all upstream nameservers.
+	DNSForwardParallel bool
 	// ProxyType is the type of proxy we are configured to handle
 	ProxyType model.NodeType
 	// ProxyNamespace to use for local dns resolution
@@ -501,15 +503,14 @@ func (a *Agent) initSdsServer() error {
 		a.secOpts.RootCertFilePath = security.WorkloadIdentityRootCertPath
 		a.secOpts.CertChainFilePath = security.WorkloadIdentityCertChainPath
 		a.secOpts.KeyFilePath = security.WorkloadIdentityKeyPath
-
-		a.secretCache, err = cache.NewSecretManagerClient(nil, a.secOpts)
-	} else {
-		a.secretCache, err = a.newSecretManager()
+		a.secOpts.FileMountedCerts = true
 	}
 
+	a.secretCache, err = a.newSecretManager()
 	if err != nil {
 		return fmt.Errorf("failed to start workload secret manager %v", err)
 	}
+
 	if a.cfg.DisableEnvoy {
 		// For proxyless we don't need an SDS server, but still need the keys and
 		// we need them refreshed periodically.
@@ -584,7 +585,8 @@ func (a *Agent) caFileWatcherHandler(ctx context.Context, caFile string) {
 func (a *Agent) initLocalDNSServer() (err error) {
 	// we don't need dns server on gateways
 	if a.cfg.DNSCapture && a.cfg.ProxyType == model.SidecarProxy {
-		if a.localDNSServer, err = dnsClient.NewLocalDNSServer(a.cfg.ProxyNamespace, a.cfg.ProxyDomain, a.cfg.DNSAddr); err != nil {
+		if a.localDNSServer, err = dnsClient.NewLocalDNSServer(a.cfg.ProxyNamespace, a.cfg.ProxyDomain, a.cfg.DNSAddr,
+			a.cfg.DNSForwardParallel); err != nil {
 			return err
 		}
 		a.localDNSServer.StartDNS()

@@ -242,7 +242,7 @@ func (configgen *ConfigGeneratorImpl) buildOutboundClusters(cb *ClusterBuilder, 
 			}
 
 			subsetClusters := cb.applyDestinationRule(defaultCluster, DefaultClusterMode, service, port,
-				clusterKey.proxyView, clusterKey.destinationRule, clusterKey.serviceAccounts)
+				clusterKey.proxyView, clusterKey.destinationRule.GetRule(), clusterKey.serviceAccounts)
 
 			if patched := cp.patch(nil, defaultCluster.build()); patched != nil {
 				resources = append(resources, patched)
@@ -322,7 +322,7 @@ func (configgen *ConfigGeneratorImpl) buildOutboundSniDnatClusters(proxy *model.
 			continue
 		}
 
-		destRule := proxy.SidecarScope.DestinationRule(model.TrafficDirectionOutbound, proxy, service.Hostname)
+		destRule := proxy.SidecarScope.DestinationRule(model.TrafficDirectionOutbound, proxy, service.Hostname).GetRule()
 		for _, port := range service.Ports {
 			if port.Protocol == protocol.UDP {
 				continue
@@ -506,14 +506,13 @@ func convertResolution(proxyType model.NodeType, service *model.Service) cluster
 		return cluster.Cluster_LOGICAL_DNS
 	case model.Passthrough:
 		// Gateways cannot use passthrough clusters. So fallback to EDS
-		if proxyType == model.SidecarProxy {
-			if service.Attributes.ServiceRegistry == provider.Kubernetes && features.EnableEDSForHeadless {
-				return cluster.Cluster_EDS
-			}
-
-			return cluster.Cluster_ORIGINAL_DST
+		if proxyType == model.Router {
+			return cluster.Cluster_EDS
 		}
-		return cluster.Cluster_EDS
+		if service.Attributes.ServiceRegistry == provider.Kubernetes && features.EnableEDSForHeadless {
+			return cluster.Cluster_EDS
+		}
+		return cluster.Cluster_ORIGINAL_DST
 	default:
 		return cluster.Cluster_EDS
 	}
@@ -659,13 +658,17 @@ func applyOutlierDetection(c *cluster.Cluster, outlier *networking.OutlierDetect
 
 	// Disable panic threshold by default as its not typically applicable in k8s environments
 	// with few pods per service.
-	// To do so, set the healthy_panic_threshold field even if its value is 0 (defaults to 50).
+	// To do so, set the healthy_panic_threshold field even if its value is 0 (defaults to 50 in Envoy).
 	// FIXME: we can't distinguish between it being unset or being explicitly set to 0
-	if outlier.MinHealthPercent >= 0 {
-		if c.CommonLbConfig == nil {
-			c.CommonLbConfig = &cluster.Cluster_CommonLbConfig{}
+	minHealthPercent := outlier.MinHealthPercent
+	if minHealthPercent >= 0 {
+		// When we are sending unhealthy endpoints, we should disble Panic Threshold. Otherwise
+		// Envoy will send traffic to "Unready" pods when the percentage of healthy hosts fall
+		// below minimum health percentage.
+		if features.SendUnhealthyEndpoints {
+			minHealthPercent = 0
 		}
-		c.CommonLbConfig.HealthyPanicThreshold = &xdstype.Percent{Value: float64(outlier.MinHealthPercent)} // defaults to 50
+		c.CommonLbConfig.HealthyPanicThreshold = &xdstype.Percent{Value: float64(minHealthPercent)}
 	}
 }
 
@@ -679,11 +682,13 @@ func defaultLBAlgorithm() cluster.Cluster_LbPolicy {
 func applyLoadBalancer(c *cluster.Cluster, lb *networking.LoadBalancerSettings, port *model.Port,
 	locality *core.Locality, proxyLabels map[string]string, meshConfig *meshconfig.MeshConfig,
 ) {
+	// Disable panic threshold when SendUnhealthyEndpoints is enabled as enabling it "may" send traffic to unready
+	// end points when load balancer is in panic mode.
+	if features.SendUnhealthyEndpoints {
+		c.CommonLbConfig.HealthyPanicThreshold = &xdstype.Percent{Value: 0}
+	}
 	localityLbSetting := loadbalancer.GetLocalityLbSetting(meshConfig.GetLocalityLbSetting(), lb.GetLocalityLbSetting())
 	if localityLbSetting != nil {
-		if c.CommonLbConfig == nil {
-			c.CommonLbConfig = &cluster.Cluster_CommonLbConfig{}
-		}
 		c.CommonLbConfig.LocalityConfigSpecifier = &cluster.Cluster_CommonLbConfig_LocalityWeightedLbConfig_{
 			LocalityWeightedLbConfig: &cluster.Cluster_CommonLbConfig_LocalityWeightedLbConfig{},
 		}
@@ -836,7 +841,7 @@ func addTelemetryMetadata(opts buildClusterOpts, service *model.Service, directi
 		have := make(map[host.Name]bool)
 		for _, svc := range instances {
 			if svc.ServicePort.Port != opts.port.Port {
-				// If the service port is different from the the port of the cluster that is being built,
+				// If the service port is different from the port of the cluster that is being built,
 				// skip adding telemetry metadata for the service to the cluster.
 				continue
 			}

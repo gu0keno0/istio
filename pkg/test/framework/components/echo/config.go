@@ -170,6 +170,22 @@ type Config struct {
 	IPFamilyPolicy string
 }
 
+// Getter for a custom echo deployment
+type CustomGetter func() []Config
+
+// Get is a utility method that helps in readability of call sites.
+func (g CustomGetter) Get() []Config {
+	return g()
+}
+
+// Future creates a Getter for a variable the custom echo deployment that will be set at sometime in the future.
+// This is helpful for configuring a setup chain for a test suite that operates on global variables.
+func CustomFuture(custom *[]Config) CustomGetter {
+	return func() []Config {
+		return *custom
+	}
+}
+
 // NamespaceName returns the string name of the namespace.
 func (c Config) NamespaceName() string {
 	return c.NamespacedName().NamespaceName()
@@ -246,17 +262,32 @@ func (c Config) IsStatefulSet() bool {
 }
 
 // IsNaked checks if the config has no sidecar.
-// Note: mixed workloads are considered 'naked'
+// Note: instances that mix subsets with and without sidecars are considered 'naked'.
 func (c Config) IsNaked() bool {
 	for _, s := range c.Subsets {
-		if s.Annotations == nil {
-			continue
-		}
-		if !s.Annotations.GetBool(SidecarInject) {
+		if s.Annotations != nil && !s.Annotations.GetBool(SidecarInject) {
 			return true
 		}
 	}
 	return false
+}
+
+// IsAllNaked checks if every subset is configured with no sidecar.
+func (c Config) IsAllNaked() bool {
+	if len(c.Subsets) == 0 {
+		// No subsets - default to not-naked.
+		return false
+	}
+
+	for _, s := range c.Subsets {
+		if s.Annotations == nil || s.Annotations.GetBool(SidecarInject) {
+			// Sidecar injection is enabled - it's not naked.
+			return false
+		}
+	}
+
+	// All subsets were annotated indicating no sidecar injection.
+	return true
 }
 
 func (c Config) IsProxylessGRPC() bool {
