@@ -15,6 +15,8 @@
 package monitor
 
 import (
+	"crypto/sha256"
+	"encoding/hex"
 	"os"
 	"path/filepath"
 	"sort"
@@ -105,11 +107,16 @@ func (f *FileSnapshot) ReadConfigFiles() ([]*config.Config, error) {
 func parseInputs(data []byte, domainSuffix string) ([]*config.Config, error) {
 	configs, _, err := crd.ParseInputs(string(data))
 
+	hasher := sha256.New()
+	hasher.Write(data)
+	checksum := hex.EncodeToString(hasher.Sum(nil))
+
 	// Convert to an array of pointers.
 	refs := make([]*config.Config, len(configs))
 	for i := range configs {
 		refs[i] = &configs[i]
 		refs[i].Domain = domainSuffix
+		refs[i].SourceChecksum = checksum
 	}
 	return refs, err
 }

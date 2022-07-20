@@ -104,6 +104,10 @@ type Config struct {
 
 	// Status holds long-running status.
 	Status Status
+
+	// SourceChecksum is the SHA256 hash of the configuration's source,
+	// for example, a file.
+	SourceChecksum string
 }
 
 func ObjectInRevision(o *Config, rev string) bool {

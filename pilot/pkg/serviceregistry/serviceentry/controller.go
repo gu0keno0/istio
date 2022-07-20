@@ -234,9 +234,10 @@ func (s *Controller) workloadEntryHandler(old, curr config.Config, event model.E
 	addConfigs := func(se *networking.ServiceEntry, services []*model.Service) {
 		// If serviceentry's resolution is DNS, make a full push
 		// TODO: maybe cds?
-		if se.Resolution == networking.ServiceEntry_DNS || se.Resolution == networking.ServiceEntry_DNS_ROUND_ROBIN {
+		if se.Resolution == networking.ServiceEntry_DNS || se.Resolution == networking.ServiceEntry_DNS_ROUND_ROBIN || se.Resolution == networking.ServiceEntry_STATIC {
 			fullPush = true
 			for key, value := range getUpdatedConfigs(services) {
+				log.Debugf("In workloadEntryHandler: adding service entry config key %v for xDS push", key)
 				configsUpdated[key] = value
 			}
 		}

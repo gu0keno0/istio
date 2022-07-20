@@ -169,6 +169,7 @@ func (m *Monitor) checkAndUpdate() {
 	copyConfigs := make([]*config.Config, 0)
 	for _, config := range newConfigs {
 		cpy := config.DeepCopy()
+		cpy.SourceChecksum = config.SourceChecksum
 		copyConfigs = append(copyConfigs, &cpy)
 	}
 
@@ -180,15 +181,25 @@ func (m *Monitor) checkAndUpdate() {
 		oldConfig := m.configs[oldIndex]
 		newConfig := newConfigs[newIndex]
 		if v := compareIds(oldConfig, newConfig); v < 0 {
+			log.Infof(
+				"Deleting old config %s %s/%s (version=%v, checksum=%v)",
+				oldConfig.GroupVersionKind, oldConfig.Namespace, oldConfig.Name, oldConfig.Meta.ResourceVersion, oldConfig.SourceChecksum)
 			m.deleteConfig(oldConfig)
 			oldIndex++
 		} else if v > 0 {
+			log.Infof(
+				"Creating new config %s %s/%s (version=%v, checksum=%v)",
+				newConfig.GroupVersionKind, newConfig.Namespace, newConfig.Name, newConfig.Meta.ResourceVersion, newConfig.SourceChecksum)
 			m.createConfig(newConfig)
 			newIndex++
 		} else {
 			// version may change without content changing
 			oldConfig.Meta.ResourceVersion = newConfig.Meta.ResourceVersion
-			if !reflect.DeepEqual(oldConfig, newConfig) {
+			if oldConfig.SourceChecksum != newConfig.SourceChecksum && !reflect.DeepEqual(oldConfig, newConfig) {
+				log.Infof(
+					"Updating old config %s %s/%s (version=%v, checksum=%v) to new config %s %s/%s (version=%v, checksum=%v)",
+					oldConfig.GroupVersionKind, oldConfig.Namespace, oldConfig.Name, oldConfig.Meta.ResourceVersion, oldConfig.SourceChecksum,
+					newConfig.GroupVersionKind, newConfig.Namespace, newConfig.Name, newConfig.Meta.ResourceVersion, newConfig.SourceChecksum)
 				m.updateConfig(newConfig)
 			}
 			oldIndex++
