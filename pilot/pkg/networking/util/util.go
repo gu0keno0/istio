@@ -473,6 +473,12 @@ func BuildLbEndpointMetadata(networkID network.ID, tlsMode, workloadname, namesp
 		addIstioEndpointLabel(metadata, "workload", &structpb.Value{Kind: &structpb.Value_StringValue{StringValue: sb.String()}})
 	}
 
+	if features.EndpointCustomLabel {
+		for lk, lv := range(labels) {
+			addIstioEndpointLabel(metadata, "istio-custom-label-" + lk, &structpb.Value{Kind: &structpb.Value_StringValue{StringValue: lv}})
+		}
+	}
+
 	return metadata
 }
 
