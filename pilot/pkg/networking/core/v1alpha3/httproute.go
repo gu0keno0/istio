@@ -168,12 +168,13 @@ func (configgen *ConfigGeneratorImpl) buildSidecarOutboundHTTPRouteConfig(
 		// If so, then  we simply have to return only the relevant virtual hosts for
 		// this listener's host:port
 		if vhosts, exists := vHostCache[listenerPort]; exists {
-			virtualHosts = getVirtualHostsForSniffedServicePort(vhosts, routeName)
+			virtualHosts = GetVirtualHostsForSniffedServicePort(vhosts, routeName)
 			cacheHit = true
 		}
 	}
 	if !cacheHit {
 		virtualHosts, resource, routeCache = BuildSidecarOutboundVirtualHosts(node, req.Push, routeName, listenerPort, efKeys, configgen.Cache)
+		log.Debugf("In buildSidecarOutboundHTTPRouteConfig: BuildSidecarOutboundVirtualHosts has built %d virtual hosts for route name %v", len(virtualHosts), routeName)
 		if resource != nil {
 			return resource, true
 		}
@@ -186,7 +187,7 @@ func (configgen *ConfigGeneratorImpl) buildSidecarOutboundHTTPRouteConfig(
 		// per api spec, these hostnames + routes should appear in the virtual hosts (think bookinfo.com and
 		// productpage.ns1.svc.cluster.local). See the TODO in BuildSidecarOutboundVirtualHosts for the right solution
 		if useSniffing {
-			virtualHosts = getVirtualHostsForSniffedServicePort(virtualHosts, routeName)
+			virtualHosts = GetVirtualHostsForSniffedServicePort(virtualHosts, routeName)
 		}
 	}
 
@@ -213,6 +214,8 @@ func (configgen *ConfigGeneratorImpl) buildSidecarOutboundHTTPRouteConfig(
 	if features.EnableRDSCaching && routeCache != nil {
 		configgen.Cache.Add(routeCache, req, resource)
 	}
+
+	log.Debugf("buildSidecarOutboundHTTPRouteConfig has built route config that has %d virtual hosts for route name %v", len(out.VirtualHosts), out.Name)
 
 	return resource, false
 }
@@ -496,10 +499,11 @@ func dedupeDomains(domains []string, vhdomains sets.Set, expandedHosts []string,
 // Returns the set of virtual hosts that correspond to the listener that has HTTP protocol detection
 // setup. This listener should only get the virtual hosts that correspond to this service+port and not
 // all virtual hosts that are usually supplied for 0.0.0.0:PORT.
-func getVirtualHostsForSniffedServicePort(vhosts []*route.VirtualHost, routeName string) []*route.VirtualHost {
+func GetVirtualHostsForSniffedServicePort(vhosts []*route.VirtualHost, routeName string) []*route.VirtualHost {
 	var virtualHosts []*route.VirtualHost
 	for _, vh := range vhosts {
 		for _, domain := range vh.Domains {
+			log.Debugf("GetVirtualHostsForSniffedServicePort: domain=%v , route name=%v", domain, routeName)
 			if domain == routeName {
 				virtualHosts = append(virtualHosts, vh)
 				break

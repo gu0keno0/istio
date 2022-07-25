@@ -15,6 +15,8 @@
 package grpcgen
 
 import (
+	"strings"
+
 	route "github.com/envoyproxy/go-control-plane/envoy/config/route/v3"
 	discovery "github.com/envoyproxy/go-control-plane/envoy/service/discovery/v3"
 
@@ -48,6 +50,12 @@ func buildHTTPRoute(node *model.Proxy, push *model.PushContext, routeName string
 	}
 
 	virtualHosts, _, _ := v1alpha3.BuildSidecarOutboundVirtualHosts(node, push, routeName, port, nil, &model.DisabledCache{})
+
+	// TODO(gu0keno0): clumsy, should definitely refactor once we make it work, see the comments in GetVirtualHostsForSniffedServicePort().
+	routeNameParts := strings.Split(routeName, "|")
+	if len(routeNameParts) == 4 {
+		virtualHosts = v1alpha3.GetVirtualHostsForSniffedServicePort(virtualHosts, routeNameParts[3] + ":" + routeNameParts[1])
+	}
 
 	// Only generate the required route for grpc. Will need to generate more
 	// as GRPC adds more features.
