@@ -63,6 +63,8 @@ func (g *GrpcConfigGenerator) BuildListeners(node *model.Proxy, push *model.Push
 	resp = append(resp, buildOutboundListeners(node, push, filter)...)
 	resp = append(resp, buildInboundListeners(node, push, filter.inboundNames())...)
 
+	log.Debugf("built %d lds resources for %s.", len(resp), node.ID)
+
 	return resp
 }
 
@@ -269,11 +271,13 @@ func buildRBAC(node *model.Proxy, push *model.PushContext, suffix string, contex
 func buildOutboundListeners(node *model.Proxy, push *model.PushContext, filter listenerNames) model.Resources {
 	out := make(model.Resources, 0, len(filter))
 	for _, sv := range node.SidecarScope.Services() {
+		log.Debugf("grpcgen.buildOutboundListeners: building listener for service %v", sv.Hostname)
 		serviceHost := string(sv.Hostname)
 		match, ok := filter.includes(serviceHost)
 		if !ok {
 			continue
 		}
+		log.Debugf("grpcgen.buildOutboundListeners: building listener for filtered service %v", sv.Hostname)
 		// we must duplicate the listener for every requested host - grpc may have watches for both foo and foo.ns
 		for _, matchedHost := range match.RequestedNames.SortedList() {
 			for _, p := range sv.Ports {

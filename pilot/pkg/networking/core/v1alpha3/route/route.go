@@ -963,6 +963,19 @@ func isCatchAllHeaderMatch(in *networking.StringMatch) bool {
 	return catchall
 }
 
+func isExactHeaderMatch(in *networking.StringMatch) bool {
+	if in == nil {
+		return true
+	}
+
+	switch in.MatchType.(type) {
+	case *networking.StringMatch_Exact:
+		return true
+	}
+
+	return false
+}
+
 // translateMetadataMatch translates a header match to dynamic metadata matcher. Returns nil if the header is not supported
 // or the header format is invalid for generating metadata matcher.
 //
@@ -987,6 +1000,12 @@ func translateHeaderMatch(name string, in *networking.StringMatch) *route.Header
 
 	if isCatchAllHeaderMatch(in) {
 		out.HeaderMatchSpecifier = &route.HeaderMatcher_PresentMatch{PresentMatch: true}
+		return out
+	}
+
+	if isExactHeaderMatch(in) {
+		exact := in.GetExact()
+		out.HeaderMatchSpecifier = &route.HeaderMatcher_ExactMatch{ExactMatch: exact}
 		return out
 	}
 
