@@ -94,6 +94,8 @@ type VirtualHostWrapper struct {
 func BuildSidecarVirtualHostWrapper(routeCache *Cache, node *model.Proxy, push *model.PushContext, serviceRegistry map[host.Name]*model.Service,
 	virtualServices []config.Config, listenPort int,
 ) []VirtualHostWrapper {
+	log.Debugf("Entering BuildSidecarVirtualHostWrapper.")
+
 	out := make([]VirtualHostWrapper, 0)
 
 	// dependentDestinationRules includes all the destinationrules referenced by the virtualservices, which have consistent hash policy.
@@ -218,6 +220,9 @@ func buildSidecarVirtualHostsForVirtualService(
 	listenPort int,
 	mesh *meshconfig.MeshConfig,
 ) []VirtualHostWrapper {
+
+	log.Debugf("buildSidecarVirtualHostsForVirtualService: building VirtualHosts for VirtualService %v", virtualService.Name)
+
 	meshGateway := map[string]bool{constants.IstioMeshGateway: true}
 	routes, err := BuildHTTPRoutesForVirtualService(node, virtualService, serviceRegistry, hashByDestination,
 		listenPort, meshGateway, false /* isH3DiscoveryNeeded */, mesh)
@@ -330,6 +335,9 @@ func BuildHTTPRoutesForVirtualService(
 	isHTTP3AltSvcHeaderNeeded bool,
 	mesh *meshconfig.MeshConfig,
 ) ([]*route.Route, error) {
+
+	log.Debugf("BuildHTTPRoutesForVirtualService() for Virtual Service %v", virtualService.Name)
+
 	vs, ok := virtualService.Spec.(*networking.VirtualService)
 	if !ok { // should never happen
 		return nil, fmt.Errorf("in not a virtual service: %#v", virtualService)

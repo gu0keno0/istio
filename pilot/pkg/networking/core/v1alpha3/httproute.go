@@ -38,6 +38,7 @@ import (
 	"istio.io/istio/pkg/config/protocol"
 	"istio.io/istio/pkg/proto"
 	"istio.io/istio/pkg/util/sets"
+	"istio.io/pkg/log"
 )
 
 const (
@@ -412,6 +413,7 @@ func BuildSidecarOutboundVirtualHosts(node *model.Proxy, push *model.PushContext
 			push.AddMetric(model.DuplicatedDomains, name, node.ID, msg)
 		}
 		if len(domains) > 0 {
+			log.Debugf("BuildSidecarOutboundVirtualHosts.buildVirtualHost() built virtual host: %v for domains %v", name, domains)
 			return &route.VirtualHost{
 				Name:                       name,
 				Domains:                    domains,

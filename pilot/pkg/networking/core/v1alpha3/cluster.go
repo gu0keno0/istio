@@ -43,6 +43,7 @@ import (
 	"istio.io/istio/pkg/config/protocol"
 	"istio.io/istio/pkg/config/schema/kind"
 	"istio.io/istio/pkg/util/sets"
+	"istio.io/pkg/log"
 )
 
 // deltaConfigTypes are used to detect changes and trigger delta calculations. When config updates has ONLY entries
@@ -98,6 +99,8 @@ func (configgen *ConfigGeneratorImpl) BuildDeltaClusters(proxy *model.Proxy, upd
 	// holds service ports, keyed by hostname.
 	// inner map holds port and its cluster name.
 	servicePorts := make(map[string]map[int]string)
+
+	log.Debugf("BuildDeltaClusters: proxy = %v, watched clusters=%v", proxy.ID, watched.ResourceNames)
 
 	for _, cluster := range watched.ResourceNames {
 		// WatchedResources.ResourceNames will contain the names of the clusters it is subscribed to. We can

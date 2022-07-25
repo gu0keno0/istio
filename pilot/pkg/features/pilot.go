@@ -481,9 +481,9 @@ var (
 		"If true, pilot will add telemetry related metadata to Endpoint resource, which will be consumed by telemetry filter.",
 	).Get()
 
-    EndpointCustomLabel = env.RegisterBoolVar("PILOT_ENDPOINT_CUSTOM_LABEL", true,
-        "If true, pilot will add all custom CRD workload labels as xDS Endpoint metadata K-V pairs, which can be used to carry extra information about the xDS Endpoint.",
-    ).Get()
+	EndpointCustomLabel = env.RegisterBoolVar("PILOT_ENDPOINT_CUSTOM_LABEL", true,
+		"If true, pilot will add all custom CRD workload labels as xDS Endpoint metadata K-V pairs, which can be used to carry extra information about the xDS Endpoint.",
+	).Get()
 
 	MetadataExchange = env.RegisterBoolVar("PILOT_ENABLE_METADATA_EXCHANGE", true,
 		"If true, pilot will add metadata exchange filters, which will be consumed by telemetry filter.",

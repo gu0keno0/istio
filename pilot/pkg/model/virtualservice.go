@@ -241,6 +241,10 @@ func mergeVirtualServicesIfNeeded(
 		out = append(out, root)
 	}
 
+	log.Debugf(
+		"Merged %v VirtualServices into %v VirtualServices, %v delegated by root.",
+		len(vServices), len(out), len(delegatesByRoot))
+
 	return out, delegatesByRoot
 }
 

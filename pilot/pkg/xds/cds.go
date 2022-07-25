@@ -74,20 +74,47 @@ func cdsNeedsPush(req *model.PushRequest, proxy *model.Proxy) bool {
 }
 
 func (c CdsGenerator) Generate(proxy *model.Proxy, w *model.WatchedResource, req *model.PushRequest) (model.Resources, model.XdsLogDetails, error) {
+	log.Debugf("CdsGenerator.Generate: building clusters for %v, watched clusters: %v", proxy.ID, w.ResourceNames)
 	if !cdsNeedsPush(req, proxy) {
 		return nil, model.DefaultXdsLogDetails, nil
 	}
 	clusters, logs := c.Server.ConfigGenerator.BuildClusters(proxy, req)
-	return clusters, logs, nil
+
+	// TODO(gu0keno0): use map to speed this up.
+	clusters_filtered := model.Resources{}
+	for _, c := range clusters {
+		for _, wrn := range w.ResourceNames {
+			if wrn == c.Name {
+				clusters_filtered = append(clusters_filtered, c)
+			}
+		}
+	}
+
+	return clusters_filtered, logs, nil
 }
 
 // GenerateDeltas for CDS currently only builds deltas when services change. todo implement changes for DestinationRule, etc
 func (c CdsGenerator) GenerateDeltas(proxy *model.Proxy, req *model.PushRequest,
 	w *model.WatchedResource,
 ) (model.Resources, model.DeletedResources, model.XdsLogDetails, bool, error) {
+	log.Debugf("CdsGenerator.GenerateDeltas: building clusters for %v, watched clusters: %v", proxy.ID, w.ResourceNames)
 	if !cdsNeedsPush(req, proxy) {
 		return nil, nil, model.DefaultXdsLogDetails, false, nil
 	}
 	updatedClusters, removedClusters, logs, usedDelta := c.Server.ConfigGenerator.BuildDeltaClusters(proxy, req, w)
-	return updatedClusters, removedClusters, logs, usedDelta, nil
+
+	if usedDelta {
+		return updatedClusters, removedClusters, logs, true, nil
+	} else {
+		// TODO(gu0keno0): use map to speed this up.
+		clusters_filtered := model.Resources{}
+		for _, c := range updatedClusters {
+			for _, wrn := range w.ResourceNames {
+				if wrn == c.Name || wrn == "*" {
+					clusters_filtered = append(clusters_filtered, c)
+				}
+			}
+		}
+		return clusters_filtered, removedClusters, logs, false, nil
+	}
 }

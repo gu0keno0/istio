@@ -311,6 +311,8 @@ func (lb *ListenerBuilder) buildSidecarOutboundListeners(node *model.Proxy,
 		services := egressListener.Services()
 		virtualServices := egressListener.VirtualServices()
 
+		log.Debugf("buildSidecarOutboundListeners: istio listener = %v.", egressListener.IstioListener)
+
 		// determine the bindToPort setting for listeners
 		bindToPort := false
 		if noneMode {
@@ -450,6 +452,8 @@ func (lb *ListenerBuilder) buildSidecarOutboundListeners(node *model.Proxy,
 					listenerOpts.port = servicePort
 					listenerOpts.service = service
 
+					log.Debugf("buildSidecarOutboundListeners: get listenerOpts for service %v: bind=%v, port=%v.", service.Hostname, bind, servicePort)
+
 					// Support statefulsets/headless services with TCP ports, and empty service address field.
 					// Instead of generating a single 0.0.0.0:Port listener, generate a listener
 					// for each instance. HTTP services can happily reside on 0.0.0.0:PORT and use the
@@ -487,7 +491,8 @@ func (lb *ListenerBuilder) buildSidecarOutboundListeners(node *model.Proxy,
 						}
 					} else {
 						// Standard logic for headless and non headless services
-						lb.buildSidecarOutboundListenerForPortOrUDS(listenerOpts, listenerMap, virtualServices, actualWildcard)
+						log.Debugf("buildSidecarOutboundListeners: Standard logic for headless and non headless services.")
+						lb.buildSidecarOutboundListenerForPortOrUDS(listenerOpts, listenerMap, virtualServices, service.Hostname.String())
 					}
 				}
 			}
@@ -577,6 +582,10 @@ func buildSidecarOutboundHTTPListenerOptsForPortOrUDS(listenerMapKey *string,
 	listenerMap map[string]*outboundListenerEntry, actualWildcard string,
 	listenerProtocol istionetworking.ListenerProtocol,
 ) (bool, []*filterChainOpts) {
+
+	log.Debugf("buildSidecarOutboundHTTPListenerOptsForPortOrUDS: building listener for bind=%v, port=%v, protocol=%v",
+		listenerOpts.bind, listenerOpts.port, listenerProtocol)
+
 	// first identify the bind if its not set. Then construct the key
 	// used to lookup the listener in the conflict map.
 	if len(listenerOpts.bind) == 0 { // no user specified bind. Use 0.0.0.0:Port
@@ -644,7 +653,7 @@ func buildSidecarOutboundHTTPListenerOptsForPortOrUDS(listenerMapKey *string,
 			sniffingEnabled && listenerOpts.bind != actualWildcard && listenerOpts.service != nil {
 			rdsName = string(listenerOpts.service.Hostname) + ":" + strconv.Itoa(listenerOpts.port.Port)
 		} else {
-			rdsName = strconv.Itoa(listenerOpts.port.Port)
+			rdsName = actualWildcard + ":" + strconv.Itoa(listenerOpts.port.Port)
 		}
 	}
 	httpOpts := &httpListenerOpts{

@@ -66,17 +66,23 @@ func ldsNeedsPush(proxy *model.Proxy, req *model.PushRequest) bool {
 	return false
 }
 
-func (l LdsGenerator) Generate(proxy *model.Proxy, _ *model.WatchedResource, req *model.PushRequest) (model.Resources, model.XdsLogDetails, error) {
+func (l LdsGenerator) Generate(proxy *model.Proxy, watched *model.WatchedResource, req *model.PushRequest) (model.Resources, model.XdsLogDetails, error) {
 	if !ldsNeedsPush(proxy, req) {
 		return nil, model.DefaultXdsLogDetails, nil
 	}
 	listeners := l.Server.ConfigGenerator.BuildListeners(proxy, req.Push)
 	resources := model.Resources{}
 	for _, c := range listeners {
-		resources = append(resources, &discovery.Resource{
-			Name:     c.Name,
-			Resource: util.MessageToAny(c),
-		})
+		for _, rn := range watched.ResourceNames {
+			// TODO(gu0keno0): use a map to make the lookup O(1).
+			if c.Name == rn || rn == "*" {
+				log.Debugf("Pushing listener %v to proxy %v", c.Name, proxy.ID)
+				resources = append(resources, &discovery.Resource{
+					Name:     c.Name,
+					Resource: util.MessageToAny(c),
+				})
+			}
+		}
 	}
 	return resources, model.DefaultXdsLogDetails, nil
 }
