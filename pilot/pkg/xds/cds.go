@@ -83,6 +83,10 @@ func (c CdsGenerator) Generate(proxy *model.Proxy, w *model.WatchedResource, req
 	// TODO(gu0keno0): use map to speed this up.
 	clusters_filtered := model.Resources{}
 	for _, c := range clusters {
+		if len(w.ResourceNames) == 0 {
+			clusters_filtered = append(clusters_filtered, c)
+			continue
+		}
 		for _, wrn := range w.ResourceNames {
 			if wrn == c.Name {
 				clusters_filtered = append(clusters_filtered, c)
@@ -109,6 +113,10 @@ func (c CdsGenerator) GenerateDeltas(proxy *model.Proxy, req *model.PushRequest,
 		// TODO(gu0keno0): use map to speed this up.
 		clusters_filtered := model.Resources{}
 		for _, c := range updatedClusters {
+			if len(w.ResourceNames) == 0 {
+				clusters_filtered = append(clusters_filtered, c)
+				continue
+			}
 			for _, wrn := range w.ResourceNames {
 				if wrn == c.Name || wrn == "*" {
 					clusters_filtered = append(clusters_filtered, c)

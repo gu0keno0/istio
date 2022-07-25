@@ -73,6 +73,13 @@ func (l LdsGenerator) Generate(proxy *model.Proxy, watched *model.WatchedResourc
 	listeners := l.Server.ConfigGenerator.BuildListeners(proxy, req.Push)
 	resources := model.Resources{}
 	for _, c := range listeners {
+		if len(watched.ResourceNames) == 0 {
+			resources = append(resources, &discovery.Resource{
+				Name:     c.Name,
+				Resource: util.MessageToAny(c),
+			})
+			continue
+		}
 		for _, rn := range watched.ResourceNames {
 			// TODO(gu0keno0): use a map to make the lookup O(1).
 			if c.Name == rn || rn == "*" {
