@@ -94,7 +94,7 @@ type VirtualHostWrapper struct {
 func BuildSidecarVirtualHostWrapper(routeCache *Cache, node *model.Proxy, push *model.PushContext, serviceRegistry map[host.Name]*model.Service,
 	virtualServices []config.Config, listenPort int,
 ) []VirtualHostWrapper {
-	log.Debugf("Entering BuildSidecarVirtualHostWrapper.")
+	log.Debugf("In BuildSidecarVirtualHostWrapper.")
 
 	out := make([]VirtualHostWrapper, 0)
 

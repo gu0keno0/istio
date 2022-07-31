@@ -54,6 +54,8 @@ func (configgen *ConfigGeneratorImpl) BuildHTTPRoutes(
 ) ([]*discovery.Resource, model.XdsLogDetails) {
 	var routeConfigurations model.Resources
 
+	log.Debugf("BuildHTTPRoutes: building routes for %v", routeNames)
+
 	efw := req.Push.EnvoyFilters(node)
 	hit, miss := 0, 0
 	switch node.Type {
@@ -147,6 +149,8 @@ func (configgen *ConfigGeneratorImpl) buildSidecarOutboundHTTPRouteConfig(
 		listenerPort, err = strconv.Atoi(routeName)
 	}
 
+	log.Debugf("In buildSidecarOutboundHTTPRouteConfig(): listenerPort=%v, routeName=%v, useSniffing=%v", listenerPort, routeName, useSniffing)
+
 	if err != nil {
 		// we have a port whose name is http_proxy or unix:///foo/bar
 		// check for both.
@@ -170,11 +174,15 @@ func (configgen *ConfigGeneratorImpl) buildSidecarOutboundHTTPRouteConfig(
 		if vhosts, exists := vHostCache[listenerPort]; exists {
 			virtualHosts = GetVirtualHostsForSniffedServicePort(vhosts, routeName)
 			cacheHit = true
+		    log.Debugf("In buildSidecarOutboundHTTPRouteConfig: cache is hit: found %d virtual hosts for route name %v", len(virtualHosts), routeName)
+			if len(virtualHosts) == 1 {
+				log.Debugf("In buildSidecarOutboundHTTPRouteConfig: virtual host returned by cache: %v", virtualHosts[0])
+			}
 		}
 	}
 	if !cacheHit {
 		virtualHosts, resource, routeCache = BuildSidecarOutboundVirtualHosts(node, req.Push, routeName, listenerPort, efKeys, configgen.Cache)
-		log.Debugf("In buildSidecarOutboundHTTPRouteConfig: BuildSidecarOutboundVirtualHosts has built %d virtual hosts for route name %v", len(virtualHosts), routeName)
+		log.Debugf("In buildSidecarOutboundHTTPRouteConfig: cache is not hit, BuildSidecarOutboundVirtualHosts has built %d virtual hosts for route name %v", len(virtualHosts), routeName)
 		if resource != nil {
 			return resource, true
 		}
@@ -293,6 +301,8 @@ func BuildSidecarOutboundVirtualHosts(node *model.Proxy, push *model.PushContext
 	var virtualServices []config.Config
 	var services []*model.Service
 
+	log.Debugf("BuildSidecarOutboundVirtualHosts: building VirtualHost for route name %v, listener port %v", routeName, listenerPort)
+
 	// Get the services from the egress listener.  When sniffing is enabled, we send
 	// route name as foo.bar.com:8080 which is going to match against the wildcard
 	// egress listener only. A route with sniffing would not have been generated if there
@@ -371,6 +381,16 @@ func BuildSidecarOutboundVirtualHosts(node *model.Proxy, push *model.PushContext
 		virtualServices = selectVirtualServices(virtualServices, servicesByName)
 	}
 	// Get list of virtual services bound to the mesh gateway
+	log.Debugf(
+		"BuildSidecarOutboundVirtualHosts: calling BuildSidecarVirtualHostWrapper to build virtual host wrappers for %d virtual services, listener port %v",
+		len(virtualServices),
+		listenerPort,
+	)
+	if len(virtualServices) > 0 {
+		for idx, vs := range(virtualServices) {
+		    log.Debugf("BuildSidecarOutboundVirtualHosts: .... virtual service [%d]: %v", idx, vs)
+	    }
+	}
 	virtualHostWrappers := istio_route.BuildSidecarVirtualHostWrapper(routeCache, node, push, servicesByName, virtualServices, listenerPort)
 
 	resource, exist := xdsCache.Get(routeCache)
@@ -416,7 +436,7 @@ func BuildSidecarOutboundVirtualHosts(node *model.Proxy, push *model.PushContext
 			push.AddMetric(model.DuplicatedDomains, name, node.ID, msg)
 		}
 		if len(domains) > 0 {
-			log.Debugf("BuildSidecarOutboundVirtualHosts.buildVirtualHost() built virtual host: %v for domains %v", name, domains)
+			log.Debugf("BuildSidecarOutboundVirtualHosts.buildVirtualHost() built virtual host: %v for domains %v, routes: %v", name, domains, vhwrapper.Routes)
 			return &route.VirtualHost{
 				Name:                       name,
 				Domains:                    domains,

@@ -254,4 +254,5 @@ require (
 )
 
 replace github.com/envoyproxy/go-control-plane => github.com/gu0keno0/go-control-plane v0.0.3
+
 replace github.com/istio/api => github.com/gu0keno0/istio-api v0.0.1
