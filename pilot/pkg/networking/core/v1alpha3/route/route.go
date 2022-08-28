@@ -336,7 +336,7 @@ func BuildHTTPRoutesForVirtualService(
 	mesh *meshconfig.MeshConfig,
 ) ([]*route.Route, error) {
 
-	log.Debugf("BuildHTTPRoutesForVirtualService() for Virtual Service %v", virtualService.Name)
+	log.Debugf("BuildHTTPRoutesForVirtualService() for Virtual Service %v, listen port=%v", virtualService.Name, listenPort)
 
 	vs, ok := virtualService.Spec.(*networking.VirtualService)
 	if !ok { // should never happen
@@ -346,6 +346,7 @@ func BuildHTTPRoutesForVirtualService(
 	out := make([]*route.Route, 0, len(vs.Http))
 
 	catchall := false
+	catchallReason := "unspecified"
 	for _, http := range vs.Http {
 		if len(http.Match) == 0 {
 			if r := translateRoute(node, http, nil, listenPort, virtualService, serviceRegistry,
@@ -353,6 +354,7 @@ func BuildHTTPRoutesForVirtualService(
 				out = append(out, r)
 			}
 			catchall = true
+			catchallReason = "No HTTP Route Matcher"
 		} else {
 			for _, match := range http.Match {
 				if r := translateRoute(node, http, match, listenPort, virtualService, serviceRegistry,
@@ -362,12 +364,19 @@ func BuildHTTPRoutesForVirtualService(
 					// As an optimization, we can just top sending any more routes here.
 					if isCatchAllRoute(r) {
 						catchall = true
+						catchallReason = "HTTP Route Matcher is catch-all Matcher"
 						break
 					}
 				}
 			}
 		}
 		if catchall {
+			log.Debugf(
+				"In BuildHTTPRoutesForVirtualService(), Http route %v for Virtual Service %v(%v) is catch-all route, reason='%v'",
+				http.Name,
+				virtualService.Name,
+				virtualService,
+				catchallReason)
 			break
 		}
 	}
@@ -412,6 +421,7 @@ func translateRoute(
 	isHTTP3AltSvcHeaderNeeded bool,
 	mesh *meshconfig.MeshConfig,
 ) *route.Route {
+	log.Debugf("In translateRoute(): HTTPRoute = %v", in.Name)
 	// When building routes, it's okay if the target cluster cannot be
 	// resolved Traffic to such clusters will blackhole.
 
@@ -827,6 +837,7 @@ func translateHeadersOperations(headers *networking.Headers) headersOperations {
 
 // translateRouteMatch translates match condition
 func translateRouteMatch(node *model.Proxy, vs config.Config, in *networking.HTTPMatchRequest) *route.RouteMatch {
+	log.Debugf("In translateRouteMatch() for %v", vs.Name)
 	out := &route.RouteMatch{PathSpecifier: &route.RouteMatch_Prefix{Prefix: "/"}}
 	if in == nil {
 		return out
@@ -858,6 +869,7 @@ func translateRouteMatch(node *model.Proxy, vs config.Config, in *networking.HTT
 		return out.Headers[i].Name < out.Headers[j].Name
 	})
 
+	log.Debugf("In translateRouteMatch() for %v , in.Uri = %v", vs.Name, in.Uri)
 	if in.Uri != nil {
 		switch m := in.Uri.MatchType.(type) {
 		case *networking.StringMatch_Exact:
