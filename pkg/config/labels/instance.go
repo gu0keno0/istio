@@ -19,8 +19,10 @@ import (
 	"fmt"
 	"regexp"
 	"sort"
+	"strings"
 
 	"github.com/hashicorp/go-multierror"
+	"istio.io/istio/pkg/config/constants"
 )
 
 const (
@@ -96,7 +98,7 @@ func (i Instance) Validate() error {
 		if err := validateTagKey(k); err != nil {
 			errs = multierror.Append(errs, err)
 		}
-		if !labelValueRegexp.MatchString(v) {
+		if !strings.HasPrefix(k, constants.NonK8sLabelPrefix) && !labelValueRegexp.MatchString(v) {
 			errs = multierror.Append(errs, fmt.Errorf("invalid tag value: %q", v))
 		}
 	}

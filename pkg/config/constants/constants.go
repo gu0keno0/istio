@@ -144,4 +144,6 @@ const (
 	// metadata into corresponding generated XDS object.
 	// Currently this ONLY supports WorkloadEntry and EDS.
 	XdsMetadataKeyPrefix = "istio-xds-metadata-"
+	// Non-K8s labels does not have ot pass the K8s label format validation.
+	NonK8sLabelPrefix = "non-k8s-"
 )
