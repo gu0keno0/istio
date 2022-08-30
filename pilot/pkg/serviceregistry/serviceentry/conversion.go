@@ -250,6 +250,22 @@ func ensureCanonicalServiceLabels(name string, srcLabels map[string]string) map[
 	return srcLabels
 }
 
+func (s *Controller) convertEndpointFromCfg(service *model.Service, servicePort *networking.Port,
+    wc *config.Config, configKey *configKey, clusterID cluster.ID,
+) *model.ServiceInstance {
+	wle := convertWorkloadEntry(*wc)
+	si := s.convertEndpoint(service, servicePort, wle, configKey, clusterID)
+
+    edsMeta, annotations := make(map[string]string), wc.Annotations
+    for ak, av := range annotations {
+        if strings.HasPrefix(ak, constants.XdsMetadataKeyPrefix) {
+            edsMeta[ak] = av
+        }
+    }
+    si.Endpoint.EdsMetadata = edsMeta
+    return si
+}
+
 func (s *Controller) convertEndpoint(service *model.Service, servicePort *networking.Port,
 	wle *networking.WorkloadEntry, configKey *configKey, clusterID cluster.ID,
 ) *model.ServiceInstance {
@@ -301,13 +317,13 @@ func (s *Controller) convertEndpoint(service *model.Service, servicePort *networ
 
 // convertWorkloadEntryToServiceInstances translates a WorkloadEntry into ServiceInstances. This logic is largely the
 // same as the ServiceEntry convertServiceEntryToInstances.
-func (s *Controller) convertWorkloadEntryToServiceInstances(wle *networking.WorkloadEntry, services []*model.Service,
+func (s *Controller) convertWorkloadEntryToServiceInstances(wcfg *config.Config, services []*model.Service,
 	se *networking.ServiceEntry, configKey *configKey, clusterID cluster.ID,
 ) []*model.ServiceInstance {
 	out := make([]*model.ServiceInstance, 0)
 	for _, service := range services {
 		for _, port := range se.Ports {
-			out = append(out, s.convertEndpoint(service, port, wle, configKey, clusterID))
+			out = append(out, s.convertEndpointFromCfg(service, port, wcfg, configKey, clusterID))
 		}
 	}
 	return out
@@ -424,6 +440,14 @@ func (s *Controller) convertWorkloadEntryToWorkloadInstance(cfg config.Config, c
 	}
 	networkID := s.workloadEntryNetwork(we)
 	labels := labelutil.AugmentLabels(we.Labels, clusterID, we.Locality, networkID)
+
+	edsMeta, annotations := make(map[string]string), cfg.Annotations
+	for ak, av := range annotations {
+		if strings.HasPrefix(ak, constants.XdsMetadataKeyPrefix) {
+			edsMeta[ak] = av
+		}
+	}
+
 	return &model.WorkloadInstance{
 		Endpoint: &model.IstioEndpoint{
 			Address: addr,
@@ -441,6 +465,7 @@ func (s *Controller) convertWorkloadEntryToWorkloadInstance(cfg config.Config, c
 			Labels:         labels,
 			TLSMode:        tlsMode,
 			ServiceAccount: sa,
+			EdsMetadata: edsMeta,
 		},
 		PortMap:             we.Ports,
 		Namespace:           cfg.Namespace,

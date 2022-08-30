@@ -466,6 +466,9 @@ type IstioEndpoint struct {
 
 	// Indicatesthe endpoint health status.
 	HealthStatus HealthStatus
+
+	// EdsMetadata contains K-V pairs that will go directly into generated EDS Endpoint object.
+	EdsMetadata map[string]string
 }
 
 // GetLoadBalancingWeight returns the weight for this endpoint, normalized to always be > 0.

@@ -431,7 +431,7 @@ func MergeAnyWithAny(dst *anypb.Any, src *anypb.Any) (*anypb.Any, error) {
 
 // BuildLbEndpointMetadata adds metadata values to a lb endpoint
 func BuildLbEndpointMetadata(networkID network.ID, tlsMode, workloadname, namespace string,
-	clusterID cluster.ID, labels labels.Instance,
+	clusterID cluster.ID, labels labels.Instance, edsMetadata map[string]string,
 ) *core.Metadata {
 	if networkID == "" && (tlsMode == "" || tlsMode == model.DisabledTLSModeLabel) &&
 		(!features.EndpointTelemetryLabel || !features.EnableTelemetryLabel) {
@@ -476,6 +476,13 @@ func BuildLbEndpointMetadata(networkID network.ID, tlsMode, workloadname, namesp
 	if features.EndpointCustomLabel {
 		for lk, lv := range labels {
 			addIstioEndpointLabel(metadata, "istio-custom-label-"+lk, &structpb.Value{Kind: &structpb.Value_StringValue{StringValue: lv}})
+		}
+	}
+
+	// Copy EDS Endpoint metadata directly from CRD.
+	if edsMetadata != nil {
+		for emk, emv := range edsMetadata {
+			addIstioEndpointLabel(metadata, emk, &structpb.Value{Kind: &structpb.Value_StringValue{StringValue: emv}})
 		}
 	}
 

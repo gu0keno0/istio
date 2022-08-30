@@ -264,7 +264,7 @@ func (s *Controller) workloadEntryHandler(old, curr config.Config, event model.E
 			log.Debugf("skip selecting workload instance %v/%v for DNS service entry %v", wi.Namespace, wi.Name, se.Hosts)
 			continue
 		}
-		instance := s.convertWorkloadEntryToServiceInstances(wle, services, se, &key, s.Cluster())
+		instance := s.convertWorkloadEntryToServiceInstances(&curr, services, se, &key, s.Cluster())
 		instancesUpdated = append(instancesUpdated, instance...)
 		if event == model.EventDelete {
 			s.serviceInstances.deleteServiceEntryInstances(namespacedName, key)
@@ -283,7 +283,7 @@ func (s *Controller) workloadEntryHandler(old, curr config.Config, event model.E
 			log.Debugf("skip selecting workload instance %v/%v for DNS service entry %v", wi.Namespace, wi.Name, se.Hosts)
 			continue
 		}
-		instance := s.convertWorkloadEntryToServiceInstances(wle, services, se, &key, s.Cluster())
+		instance := s.convertWorkloadEntryToServiceInstances(&curr, services, se, &key, s.Cluster())
 		instancesDeleted = append(instancesDeleted, instance...)
 		s.serviceInstances.deleteServiceEntryInstances(namespacedName, key)
 		addConfigs(se, services)
@@ -726,6 +726,7 @@ func (s *Controller) buildEndpoints(keys map[instancesKey]struct{}) map[instance
 					TLSMode:         instance.Endpoint.TLSMode,
 					WorkloadName:    instance.Endpoint.WorkloadName,
 					Namespace:       instance.Endpoint.Namespace,
+					EdsMetadata:     instance.Endpoint.EdsMetadata,
 				})
 		}
 
