@@ -134,28 +134,30 @@ func BuildSidecarVirtualHostWrapper(routeCache *Cache, node *model.Proxy, push *
 		}
 	}
 
-	hashByService := map[host.Name]map[int]*networking.LoadBalancerSettings_ConsistentHashLB{}
-	for _, svc := range serviceRegistry {
-		for _, port := range svc.Ports {
-			if port.Protocol.IsHTTP() || util.IsProtocolSniffingEnabledForPort(port) {
-				hash, destinationRule := getHashForService(node, push, svc, port)
-				if hash != nil {
-					if _, ok := hashByService[svc.Hostname]; !ok {
-						hashByService[svc.Hostname] = map[int]*networking.LoadBalancerSettings_ConsistentHashLB{}
-					}
-					hashByService[svc.Hostname][port.Port] = hash
-					dependentDestinationRules = append(dependentDestinationRules, destinationRule)
-				}
-			}
-		}
-	}
+	if node.Metadata.Generator != "grpc" {
+	    hashByService := map[host.Name]map[int]*networking.LoadBalancerSettings_ConsistentHashLB{}
+    	for _, svc := range serviceRegistry {
+		    for _, port := range svc.Ports {
+		    	if port.Protocol.IsHTTP() || util.IsProtocolSniffingEnabledForPort(port) {
+	    			hash, destinationRule := getHashForService(node, push, svc, port)
+    				if hash != nil {
+					    if _, ok := hashByService[svc.Hostname]; !ok {
+						    hashByService[svc.Hostname] = map[int]*networking.LoadBalancerSettings_ConsistentHashLB{}
+					    }
+					    hashByService[svc.Hostname][port.Port] = hash
+					    dependentDestinationRules = append(dependentDestinationRules, destinationRule)
+				    }
+			    }
+		    }
+	    }
 
-	if routeCache != nil {
-		routeCache.DestinationRules = dependentDestinationRules
-	}
+    	if routeCache != nil {
+		    routeCache.DestinationRules = dependentDestinationRules
+    	}
 
-	// append default hosts for the service missing virtual Services
-	out = append(out, buildSidecarVirtualHostsForService(serviceRegistry, hashByService, push.Mesh)...)
+	    // append default hosts for the service missing virtual Services
+	    out = append(out, buildSidecarVirtualHostsForService(serviceRegistry, hashByService, push.Mesh)...)
+    }
 	return out
 }
 

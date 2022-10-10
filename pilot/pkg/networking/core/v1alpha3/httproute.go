@@ -182,7 +182,7 @@ func (configgen *ConfigGeneratorImpl) buildSidecarOutboundHTTPRouteConfig(
 	}
 	if !cacheHit {
 		virtualHosts, resource, routeCache = BuildSidecarOutboundVirtualHosts(node, req.Push, routeName, listenerPort, efKeys, configgen.Cache)
-		log.Debugf("In buildSidecarOutboundHTTPRouteConfig: cache is not hit, BuildSidecarOutboundVirtualHosts has built %d virtual hosts for route name %v", len(virtualHosts), routeName)
+		log.Debugf("In buildSidecarOutboundHTTPRouteConfig: local cache misses, global cache hit=%v, BuildSidecarOutboundVirtualHosts has built %d virtual hosts for route name %v", resource != nil, len(virtualHosts), routeName)
 		if resource != nil {
 			return resource, true
 		}
@@ -318,7 +318,38 @@ func BuildSidecarOutboundVirtualHosts(node *model.Proxy, push *model.PushContext
 	services = egressListener.Services()
 	// To maintain correctness, we should only use the virtualservices for
 	// this listener and not all virtual services accessible to this proxy.
-	virtualServices = egressListener.VirtualServices()
+	unfilteredVirtualServices := egressListener.VirtualServices()
+
+	// TODO(gu0keno0): instead of dynamically filter away unnecessary virtual services, we should maintain
+	// a list of virtual services needed by the connected xDS client by adjusting the list upon xDS client
+	// requesting for subscriptions.
+    log.Debugf(
+        "BuildSidecarOutboundVirtualHosts: building virtual hosts for %v unfiltered services and %v unfiltered virtual services",
+        len(services),
+        len(unfilteredVirtualServices),
+    )
+	if node.Metadata.Generator == "grpc" {
+		log.Debugf("BuildSidecarOutboundVirtualHosts: generator = grpc")
+		virtualServices = make([]config.Config, 0)
+		routeNameParts := strings.Split(routeName, "|")
+		for _, ufv := range unfilteredVirtualServices {
+			if ufv.Name + ".prod.linkedin.com" == routeNameParts[3] { // TODO(gu0keno0): fixme!!!
+				log.Debugf("BuildSidecarOutboundVirtualHosts: got one matched virtual service %v", ufv.Name)
+				virtualServices = append(virtualServices, ufv)
+			} else {
+				log.Debugf("BuildSidecarOutboundVirtualHosts: got unmatched virtual service %v and %v", ufv.Name, routeNameParts[3])
+			}
+		}
+    } else {
+		log.Debugf("BuildSidecarOutboundVirtualHosts: generator - %v", node.Metadata.Generator)
+		virtualServices = unfilteredVirtualServices
+	}
+
+    log.Debugf(
+        "BuildSidecarOutboundVirtualHosts: building virtual hosts for %v filtered services and %v filtered virtual services",
+        len(services),
+        len(virtualServices),
+    )
 
 	// When generating RDS for ports created via the SidecarScope, we treat ports as HTTP proxy style ports
 	// if ports protocol is HTTP_PROXY.
@@ -329,6 +360,7 @@ func BuildSidecarOutboundVirtualHosts(node *model.Proxy, push *model.PushContext
 
 	servicesByName := make(map[host.Name]*model.Service)
 	for _, svc := range services {
+		log.Debugf("BuildSidecarOutboundVirtualHosts: scanning through services, service name=%v", svc.Hostname)
 		if listenerPort == 0 {
 			// Take all ports when listen port is 0 (http_proxy or uds)
 			// Expect virtualServices to resolve to right port
@@ -386,11 +418,6 @@ func BuildSidecarOutboundVirtualHosts(node *model.Proxy, push *model.PushContext
 		len(virtualServices),
 		listenerPort,
 	)
-	if len(virtualServices) > 0 {
-		for idx, vs := range(virtualServices) {
-		    log.Debugf("BuildSidecarOutboundVirtualHosts: .... virtual service [%d]: %v", idx, vs)
-	    }
-	}
 	virtualHostWrappers := istio_route.BuildSidecarVirtualHostWrapper(routeCache, node, push, servicesByName, virtualServices, listenerPort)
 
 	resource, exist := xdsCache.Get(routeCache)
