@@ -30,6 +30,7 @@ import (
 var (
 	cacheMu sync.Mutex
 	cache = make(map[string]*route.RouteConfiguration)
+	enableRdsCache = true
 )
 
 // BuildHTTPRoutes supports per-VIP routes, as used by GRPC.
@@ -56,12 +57,15 @@ func buildHTTPRoute(node *model.Proxy, push *model.PushContext, routeName string
 		return nil
 	}
 
-	cacheMu.Lock()
-	defer cacheMu.Unlock()
+	if enableRdsCache {
+		// TODO(gu0keno0): implement a real cache, maybe use the xDS cache too.
+	    cacheMu.Lock()
+	    defer cacheMu.Unlock()
 
-	if routeConfig, ok := cache[routeName]; ok {
-		return routeConfig
-	}
+    	if routeConfig, ok := cache[routeName]; ok {
+		    return routeConfig
+	    }
+    }
 
 	virtualHosts, _, _ := v1alpha3.BuildSidecarOutboundVirtualHosts(node, push, routeName, port, nil, &model.DisabledCache{})
 
@@ -71,10 +75,12 @@ func buildHTTPRoute(node *model.Proxy, push *model.PushContext, routeName string
 		virtualHosts = v1alpha3.GetVirtualHostsForSniffedServicePort(virtualHosts, routeNameParts[3] + ":" + routeNameParts[1])
 	}
 
-	cache[routeName] = &route.RouteConfiguration{
-		Name:         routeName,
-		VirtualHosts: virtualHosts,
-	}
+	if enableRdsCache {
+	    cache[routeName] = &route.RouteConfiguration{
+		    Name:         routeName,
+		    VirtualHosts: virtualHosts,
+	    }
+    }
 
 	// Only generate the required route for grpc. Will need to generate more
 	// as GRPC adds more features.

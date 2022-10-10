@@ -315,7 +315,7 @@ func BuildSidecarOutboundVirtualHosts(node *model.Proxy, push *model.PushContext
 		return nil, nil, nil
 	}
 
-	services = egressListener.Services()
+	unfilteredServices := egressListener.Services()
 	// To maintain correctness, we should only use the virtualservices for
 	// this listener and not all virtual services accessible to this proxy.
 	unfilteredVirtualServices := egressListener.VirtualServices()
@@ -325,7 +325,7 @@ func BuildSidecarOutboundVirtualHosts(node *model.Proxy, push *model.PushContext
 	// requesting for subscriptions.
     log.Debugf(
         "BuildSidecarOutboundVirtualHosts: building virtual hosts for %v unfiltered services and %v unfiltered virtual services",
-        len(services),
+        len(unfilteredServices),
         len(unfilteredVirtualServices),
     )
 	if node.Metadata.Generator == "grpc" {
@@ -340,9 +340,18 @@ func BuildSidecarOutboundVirtualHosts(node *model.Proxy, push *model.PushContext
 				log.Debugf("BuildSidecarOutboundVirtualHosts: got unmatched virtual service %v and %v", ufv.Name, routeNameParts[3])
 			}
 		}
+		for _, ufs := range unfilteredServices {
+			if ufs.Hostname.String() == routeNameParts[3] {
+				log.Debugf("BuildSidecarOutboundVirtualHosts: got one matched service %v", ufs.Hostname)
+				services = append(services, ufs)
+			} else {
+				log.Debugf("BuildSidecarOutboundVirtualHosts: got unmatched service %v and %v", ufs.Hostname.String(), routeNameParts[3])
+			}
+		}
     } else {
 		log.Debugf("BuildSidecarOutboundVirtualHosts: generator - %v", node.Metadata.Generator)
 		virtualServices = unfilteredVirtualServices
+		services = unfilteredServices
 	}
 
     log.Debugf(
@@ -382,7 +391,7 @@ func BuildSidecarOutboundVirtualHosts(node *model.Proxy, push *model.PushContext
 
 	var routeCache *istio_route.Cache
 
-	if listenerPort > 0 {
+	if listenerPort > 0 && node.Metadata.Generator != "grpc" {
 		services = make([]*model.Service, 0, len(servicesByName))
 		// sort services
 		for _, svc := range servicesByName {
@@ -408,7 +417,7 @@ func BuildSidecarOutboundVirtualHosts(node *model.Proxy, push *model.PushContext
 	}
 
 	// This is hack to keep consistent with previous behavior.
-	if listenerPort != 80 {
+	if listenerPort != 80 && node.Metadata.Generator != "grpc" {
 		// only select virtualServices that matches a service
 		virtualServices = selectVirtualServices(virtualServices, servicesByName)
 	}
@@ -418,6 +427,7 @@ func BuildSidecarOutboundVirtualHosts(node *model.Proxy, push *model.PushContext
 		len(virtualServices),
 		listenerPort,
 	)
+	// For gRPC servicesByName only contains Istio services that are corresponding to the Virtual Service.
 	virtualHostWrappers := istio_route.BuildSidecarVirtualHostWrapper(routeCache, node, push, servicesByName, virtualServices, listenerPort)
 
 	resource, exist := xdsCache.Get(routeCache)

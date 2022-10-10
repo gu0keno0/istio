@@ -105,13 +105,7 @@ func BuildSidecarVirtualHostWrapper(routeCache *Cache, node *model.Proxy, push *
 	for _, virtualService := range virtualServices {
 		for _, httpRoute := range virtualService.Spec.(*networking.VirtualService).Http {
 			for _, destination := range httpRoute.Route {
-				hostName := destination.Destination.Host
-				var configNamespace string
-				if serviceRegistry[host.Name(hostName)] != nil {
-					configNamespace = serviceRegistry[host.Name(hostName)].Attributes.Namespace
-				} else {
-					configNamespace = virtualService.Namespace
-				}
+				configNamespace := virtualService.Namespace
 				hash, destinationRule := GetHashForHTTPDestination(push, node, destination, configNamespace)
 				if hash != nil {
 					hashByDestination[destination] = hash
@@ -127,14 +121,13 @@ func BuildSidecarVirtualHostWrapper(routeCache *Cache, node *model.Proxy, push *
 		out = append(out, wrappers...)
 	}
 
-	// compute Services missing virtual service configs
-	for _, wrapper := range out {
-		for _, service := range wrapper.Services {
-			delete(serviceRegistry, service.Hostname)
-		}
-	}
-
 	if node.Metadata.Generator != "grpc" {
+        // compute Services missing virtual service configs
+        for _, wrapper := range out {
+            for _, service := range wrapper.Services {
+                delete(serviceRegistry, service.Hostname)
+            }
+        }
 	    hashByService := map[host.Name]map[int]*networking.LoadBalancerSettings_ConsistentHashLB{}
     	for _, svc := range serviceRegistry {
 		    for _, port := range svc.Ports {
@@ -232,39 +225,18 @@ func buildSidecarVirtualHostsForVirtualService(
 		return nil
 	}
 
-	hosts, servicesInVirtualService := separateVSHostsAndServices(virtualService, serviceRegistry)
+    services := make([]*model.Service, 0)
+    for _, svc := range serviceRegistry {
+        services = append(services, svc)
+    }
 
-	// Now group these Services by port so that we can infer the destination.port if the user
-	// doesn't specify any port for a multiport service. We need to know the destination port in
-	// order to build the cluster name (outbound|<port>|<subset>|<serviceFQDN>)
-	// If the destination service is being accessed on port X, we set that as the default
-	// destination port
-	serviceByPort := make(map[int][]*model.Service)
-	for _, svc := range servicesInVirtualService {
-		for _, port := range svc.Ports {
-			if port.Protocol.IsHTTP() || util.IsProtocolSniffingEnabledForPort(port) {
-				serviceByPort[port.Port] = append(serviceByPort[port.Port], svc)
-			}
-		}
-	}
-
-	if len(serviceByPort) == 0 {
-		if listenPort == 80 {
-			// TODO: This is a gross HACK. Fix me. Its a much bigger surgery though, due to the way
-			// the current code is written.
-			serviceByPort[80] = nil
-		}
-	}
-
-	out := make([]VirtualHostWrapper, 0, len(serviceByPort))
-	for port, services := range serviceByPort {
-		out = append(out, VirtualHostWrapper{
-			Port:                port,
-			Services:            services,
-			VirtualServiceHosts: hosts,
-			Routes:              routes,
-		})
-	}
+	out := make([]VirtualHostWrapper, 0)
+	out = append(out, VirtualHostWrapper{
+		Port:                listenPort,
+		Services:            services,
+		VirtualServiceHosts: []string{},
+		Routes:              routes,
+	})
 
 	return out
 }
@@ -298,6 +270,11 @@ func buildSidecarVirtualHostsForService(
 		}
 	}
 	return out
+}
+
+func GetSimpleDestinationCluster(destination *networking.Destination) string {
+	port := int(destination.GetPort().GetNumber())
+    return model.BuildSubsetKey(model.TrafficDirectionOutbound, destination.Subset, host.Name(destination.Host), port)
 }
 
 // GetDestinationCluster generates a cluster name for the route, or error if no cluster
@@ -533,8 +510,9 @@ func applyHTTPRouteDestination(
 
 	if in.Mirror != nil {
 		if mp := mirrorPercent(in); mp != nil {
+			cluster := GetSimpleDestinationCluster(in.Mirror)
 			action.RequestMirrorPolicies = []*route.RouteAction_RequestMirrorPolicy{{
-				Cluster:         GetDestinationCluster(in.Mirror, serviceRegistry[host.Name(in.Mirror.Host)], listenerPort),
+				Cluster:         cluster,
 				RuntimeFraction: mp,
 				TraceSampled:    &wrappers.BoolValue{Value: false},
 			}}
@@ -555,8 +533,7 @@ func applyHTTPRouteDestination(
 				continue
 			}
 		}
-		hostname := host.Name(dst.GetDestination().GetHost())
-		n := GetDestinationCluster(dst.Destination, serviceRegistry[hostname], listenerPort)
+		n := GetSimpleDestinationCluster(dst.Destination)
 		clusterWeight := &route.WeightedCluster_ClusterWeight{
 			Name:   n,
 			Weight: weight,
